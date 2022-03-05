@@ -1,0 +1,24 @@
+{
+  "C_Cpp.clang_format_style": "Visual Studio",
+  "editor.formatOnSave": false,
+  "[cpp]": {
+    "editor.quickSuggestions": true
+  },
+  "[c]": {
+    "editor.quickSuggestions": true
+  },
+  "C_Cpp.intelliSenseEngineFallback": "Enabled",
+  "idf.port": "/dev/ttyUSB0",
+  "git.ignoreLimitWarning": true,
+  "idf.adapterTargetName": "esp32",
+  "idf.portWin": "COM6",
+  "C_Cpp.errorSquiggles": "Disabled",
+  "idf.openOcdConfigs": [
+    "interface/ftdi/esp32_devkitj_v1.cfg",
+    "target/esp32.cfg"
+  ],
+  "idf.flashType": "UART",
+  "files.associations": {
+    "functional": "c"
+  }
+}
