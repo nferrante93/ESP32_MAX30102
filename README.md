@@ -9,14 +9,16 @@ This driver developed for the MAX30102 Heart Rate and Pulse Oximetry sensor uses
 Unless required by applicable law or agreed to in writing, this
 software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
 CONDITIONS OF ANY KIND, either express or implied.*
+
 ## Summary 
 * Heartbeat recognition and heart rate display
 * SPO2 Measurement
 ## Quick Start
 ### Minimimal Setup
 
-![alt text](https://github.com/nferrante93/esp32-max30102/blob/main/images/minimal_connections.bmp)
-
+<p align="center">
+<img src="https://github.com/nferrante93/esp32-max30102/blob/main/images/minimal_connections.bmp">
+</p>
 The Connection with the ESP32-C3 are as follow:
 
  ESP32        | MAX30102 
@@ -28,14 +30,16 @@ GND           | GND
 G18           | INT
 ## Registers
 The MAX30102 is controlled/adjusted using its eight bit registers. A register map detailed in the [MAX30102 Datasheet](https://datasheets.maximintegrated.com/en/ds/MAX30102.pdf). 
-![alt text](https://github.com/nferrante93/esp32-max30102/blob/main/images/registers1.bmp)
-![alt text](https://github.com/nferrante93/esp32-max30102/blob/main/images/registers2.bmp)
-
+<p align="center">
+<img src="https://github.com/nferrante93/esp32-max30102/blob/main/images/registers1.bmp">
+<img src="https://github.com/nferrante93/esp32-max30102/blob/main/images/registers2.bmp">
+</p>
 We can see the register types, what each bit in the register does, the register address, its state when the device is powered on or reset (POR), and whether it is read only or writable.
 
 ### Interrupts Registers
-![alt text](https://github.com/nferrante93/esp32-max30102/blob/main/images/interrupts_registers.bmp)
-
+<p align="center">
+<img src="https://github.com/nferrante93/esp32-max30102/blob/main/images/interrupts_registers.bmp">
+</p>
 
 The interrupts triggered by Interrupt status 1 and Interrupt status 2 are as follows: FIFO almost full flag
 (A_FULL), new FIFO data ready (PPG_RDY), ambient light cancellation overflow (ALC_OVF), proximity
@@ -78,8 +82,9 @@ The second possibility is to use the Semaphore for notify the Getbpm task when t
 
 ## SpO2
 This is implemented in the c max30102_update function. The basic equations are discussed in detail in the [MAX30102 Application Node](https://pdfserv.maximintegrated.com/en/an/AN6409.pdf).
-![alt text](https://github.com/nferrante93/esp32-max30102/blob/main/images/max30102SpO2.bmp)
-
+<p align="center">
+<img src="https://github.com/nferrante93/esp32-max30102/blob/main/images/max30102SpO2.bmp">
+</p>
 A possible implementations of the conversion from the raw data to SpO2 values is shown below.
 ```
 float ratio_rms = log( sqrt( this->red_ac_sq_sum /
