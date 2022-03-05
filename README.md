@@ -1,10 +1,10 @@
 ESP-IDF Heart Rate and Oximeter Sensor
 ====================
 
-This is a template application to be used with [Espressif IoT Development Framework](https://github.com/espressif/esp-idf).
 This driver developed for the MAX30102 Heart Rate and Pulse Oximetry sensor uses an I2C communcations with an interrupt for the buffer reading as suggested in the [MAX30102 Datasheet](https://datasheets.maximintegrated.com/en/ds/MAX30102.pdf).
-
-
+<p align="center">
+<img src="https://github.com/nferrante93/ESP32_MAX30102/blob/main/images/Breadboard_connections.bmp" width="500" height="600">
+</p>
 *Code in this repository is in the Public Domain (or CC0 licensed, at your option.)
 Unless required by applicable law or agreed to in writing, this
 software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
@@ -14,7 +14,9 @@ CONDITIONS OF ANY KIND, either express or implied.*
 * SPO2 Measurement
 ## Quick Start
 ### Minimimal Setup
+
 ![alt text](https://github.com/nferrante93/esp32-max30102/blob/main/images/minimal_connections.bmp)
+
 The Connection with the ESP32-C3 are as follow:
 
  ESP32        | MAX30102 
@@ -26,7 +28,6 @@ GND           | GND
 G18           | INT
 ## Registers
 The MAX30102 is controlled/adjusted using its eight bit registers. A register map detailed in the [MAX30102 Datasheet](https://datasheets.maximintegrated.com/en/ds/MAX30102.pdf). 
-
 ![alt text](https://github.com/nferrante93/esp32-max30102/blob/main/images/registers1.bmp)
 ![alt text](https://github.com/nferrante93/esp32-max30102/blob/main/images/registers2.bmp)
 
@@ -34,6 +35,7 @@ We can see the register types, what each bit in the register does, the register 
 
 ### Interrupts Registers
 ![alt text](https://github.com/nferrante93/esp32-max30102/blob/main/images/interrupts_registers.bmp)
+
 
 The interrupts triggered by Interrupt status 1 and Interrupt status 2 are as follows: FIFO almost full flag
 (A_FULL), new FIFO data ready (PPG_RDY), ambient light cancellation overflow (ALC_OVF), proximity
@@ -94,7 +96,7 @@ float ratio_rms = log( sqrt( this->red_ac_sq_sum /
 ```
 ## Future Improvements
 * DC Removal from the raw data
-* Digital Signal Processing of the raw data with butterworth filter Mean Median Filter 
+* Digital Signal Processing of the raw data with butterworth filter and Mean Median Filter 
 * SpO2 and Heart Rate Measuring
 ## References
 [MAX30102 Datasheet](https://datasheets.maximintegrated.com/en/ds/MAX30102.pdf)
