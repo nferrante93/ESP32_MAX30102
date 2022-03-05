@@ -49,12 +49,14 @@ This interrupt table is implemented as an enum.
  * PWR_RDY: Power Flag Ready
  * DIE_TEMP_RDY: Internal Temperature Ready Flag
  */
-typedef enum _max30102_interrupt_t {
-  MAX30102_INTERRUPT_A_FULL   				  = 0x07,
-  MAX30102_INTERRUPT_PPG_RDY   				  = 0x06,
-  MAX30102_INTERRUPT_ALC_OVF    			  = 0x05,
-  MAX30102_INTERRUPT_DIE_TEMP_RDY   		          = 0x01,
-} max30102_interrupt_t;
+#define MAX30102_INTERRUPT_STATUS_1 0x00
+#define MAX30102_INTERRUPT_STATUS_2 0x01
+#define MAX30102_INTERRUPT_ENABLE_1 0x02
+#define MAX30102_INTERRUPT_ENABLE_2 0x03
+#define MAX30102_INTERRUPT_A_FULL 7
+#define MAX30102_INTERRUPT_PPG_RDY 6
+#define MAX30102_INTERRUPT_ALC_OVF 5
+#define MAX30102_INTERRUPT_DIE_TEMP_RDY 1
 
 ```
 * Enable the required interrupts:
@@ -70,9 +72,13 @@ if (max30102_has_interrupt(&max30102))
 max30102_interrupt_handler(&max30102);
 
 ```
+The second possibility is to use the Semaphore for notify the Getbpm task when the interrupts happens and use also a led that wil blink when the interrupts is triggered.
+
 ## SpO2
 This is implemented in the c max30102_update function. The basic equations are discussed in detail in the [MAX30102 Application Node](https://pdfserv.maximintegrated.com/en/an/AN6409.pdf).
 ![alt text](https://github.com/nferrante93/esp32-max30102/blob/main/images/max30102SpO2.bmp)
+
+A possible implementations of the conversion from the raw data to SpO2 values is shown below.
 ```
 float ratio_rms = log( sqrt( this->red_ac_sq_sum /
                                      (float)this->samples_recorded ) ) /
@@ -86,6 +92,10 @@ float ratio_rms = log( sqrt( this->red_ac_sq_sum /
         data->spO2 = this->current_spO2;
 
 ```
+## Future Improvements
+* DC Removal from the raw data
+* Digital Signal Processing of the raw data with butterworth filter Mean Median Filter 
+* SpO2 and Heart Rate Measuring
 ## References
 [MAX30102 Datasheet](https://datasheets.maximintegrated.com/en/ds/MAX30102.pdf)
 
