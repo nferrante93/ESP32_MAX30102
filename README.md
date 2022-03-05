@@ -86,23 +86,24 @@ This is implemented in the c max30102_update function. The basic equations are d
 <img src="https://github.com/nferrante93/esp32-max30102/blob/main/images/max30102SpO2.bmp">
 </p>
 A possible implementations of the conversion from the raw data to SpO2 values is shown below.
+
 ```
 float ratio_rms = log( sqrt( this->red_ac_sq_sum /
                                      (float)this->samples_recorded ) ) /
                           log( sqrt( this->ir_ac_sq_sum /
                                      (float)this->samples_recorded ) );
-
         if(this->debug)
             printf("RMS Ratio: %f\n", ratio_rms);
 
         this->current_spO2 = 104.0 - 17.0 * ratio_rms;
         data->spO2 = this->current_spO2;
-
 ```
+
 ## Future Improvements
 * DC Removal from the raw data
 * Digital Signal Processing of the raw data with butterworth filter and Mean Median Filter 
 * SpO2 and Heart Rate Measuring
+
 ## References
 [MAX30102 Datasheet](https://datasheets.maximintegrated.com/en/ds/MAX30102.pdf)
 
