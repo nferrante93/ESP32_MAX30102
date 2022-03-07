@@ -43,43 +43,26 @@ static const int RX_BUF_SIZE = 1024;
 void init_uart(void);
 
 /**
- * @brief Sets the number of pulses which the spo2 values are reset.
+ * @brief Data to be sent via UART.
  * 
- * @details This is set to a default (recommended) value in the initializer.
- * The only way to change is by calling this function.
  * 
- * @param this is the address of the configuration structure.
- * @param reset_spo2_pulse_n is the number of pulses.
+ * @param logName is the address of the configuration structure.
+ * @param data is the number of pulses.
  * 
- * @returns status of execution.
  */
 int sendData(const char* logName, const char* data);
 
 /**
- * @brief Sets the number of pulses which the spo2 values are reset.
+ * @brief Task used for receive the data
  * 
- * @details This is set to a default (recommended) value in the initializer.
- * The only way to change is by calling this function.
- * 
- * @param this is the address of the configuration structure.
- * @param reset_spo2_pulse_n is the number of pulses.
- * 
- * @returns status of execution.
  */
 static void rx_task(void *arg);
 
 /**
- * @brief Sets the number of pulses which the spo2 values are reset.
- * 
- * @details This is set to a default (recommended) value in the initializer.
- * The only way to change is by calling this function.
- * 
- * @param this is the address of the configuration structure.
- * @param reset_spo2_pulse_n is the number of pulses.
- * 
- * @returns status of execution.
+ * @brief Tasks used for send the data
+ * .
  */
-//static void tx_task(void *arg);
+static void tx_task(void *arg);
 
 
 #endif

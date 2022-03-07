@@ -20,17 +20,103 @@
 /**
  * @brief MAX30102 initiation function.
  *
- * @param obj Pointer to max30102_t object instance.
- * @param hi2c Pointer to I2C object handle
+ * @param this Pointer to max30102_t object instance.
+ * @param i2cnum Pointer to I2C object handle
  */
-void max30102_init(max30102_t *this, i2c_port_t i2c_num)
+esp_err_t max30102_init(max30102_t *this, i2c_port_t i2c_num)
 {
     this->i2c_num = i2c_num;
     this->_interrupt_flag = 0;
     memset(this->_ir_samples, 0, MAX30102_SAMPLE_LEN_MAX * sizeof(uint32_t));
     memset(this->_red_samples, 0, MAX30102_SAMPLE_LEN_MAX * sizeof(uint32_t));
+
+    esp_err_t ret = max30102_write_register(this,MAX30102_INTERRUPT_ENABLE_1,PROX_INT_EN);
+    if(ret != ESP_OK) return ret;
+    ret = max30102_write_register(this,MAX30102_FIFO_WR_PTR,0x00);
+    if(ret != ESP_OK) return ret;
+    ret = max30102_write_register(this,MAX30102_OVF_COUNTER,0x00);
+    if(ret != ESP_OK) return ret;
+    ret = max30102_write_register(this,MAX30102_FIFO_RD_PTR,0x00);
+    if(ret != ESP_OK) return ret;
+    ret = max30102_set_sample_averaging(this, max30102_smp_ave_4);
+    if(ret != ESP_OK) return ret;
+    ret = max30102_set_roll_over(this, 1);
+    if(ret != ESP_OK) return ret;
+    ret = max30102_set_almost_full(this,MAX30102_ALMOST_FULL_15);
+    if(ret != ESP_OK) return ret;
+    ret = max30102_write_register(this,MAX30102_MODE_CONFIG, 0x03);
+    if(ret != ESP_OK) return ret;
+    ret = max30102_set_sampling_rate(this, MAX30102_SAMPLING_RATE_100HZ);
+    if(ret != ESP_OK) return ret;
+    ret = max30102_set_high_res(this, MAX30102_ADC_RANGE_4096);
+    if(ret != ESP_OK) return ret;
+    ret = max30102_set_led_current(this, MAX30102_LED_CURRENT_50MA, MAX30102_LED_CURRENT_50MA);
+    if(ret != ESP_OK) return ret;
+
+    return ret;
+}
+esp_err_t max30102_set_led_current( max30102_t* this,max30102_current_t red_current,max30102_current_t ir_current )
+{
+   esp_err_t ret = max30102_write_register(this, MAX30102_LED_IR_PA1, red_current);
+   if(ret != ESP_OK) return ret;
+   return max30102_write_register(this, MAX30102_LED_RED_PA2, ir_current);
+}
+esp_err_t max30102_set_sampling_rate( max30102_t* this, max30102_sampling_rate_t rate )
+{
+    uint8_t current_spO2_reg;
+
+    esp_err_t ret = max30102_read_register( this,MAX30102_SPO2_CONFIG,&current_spO2_reg );
+    if(ret != ESP_OK) return ret;
+    printf("Setting the sampling rate...");
+    printf("%x\n", (current_spO2_reg & 0xE3) | (rate<<2) );
+    return max30102_write_register( this,MAX30102_SPO2_CONFIG, (current_spO2_reg & 0xE3) | (rate<<2) );
 }
 
+esp_err_t max30102_set_high_res(max30102_t* this, max30102_adc_range_t adc_range) {
+    uint8_t current_spO2_reg;
+
+    esp_err_t ret = max30102_read_register(this, MAX30102_SPO2_CONFIG, &current_spO2_reg);
+    if(ret != ESP_OK) return ret;
+    printf("Setting the ADC range...");
+    printf("%x\n", (current_spO2_reg & 0x9F) | (adc_range<<5) );
+    return max30102_write_register( this,MAX30102_SPO2_CONFIG,(current_spO2_reg & 0x9F) | (adc_range<<5) );
+    
+}
+esp_err_t max30102_set_sample_averaging(max30102_t* this,  max30102_smp_ave_t sample_averaging)
+{
+    uint8_t current_fifo_conf_reg;
+
+    //Tratar erros
+    esp_err_t ret = max30102_read_register( this, MAX30102_FIFO_CONFIG, &current_fifo_conf_reg );
+    if(ret != ESP_OK) return ret;
+    printf("Setting the sample averaging...");
+    printf("%x\n", (current_fifo_conf_reg & 0x1F) | (sample_averaging<<5) );
+    return max30102_write_register( this, MAX30102_FIFO_CONFIG,(current_fifo_conf_reg & 0x1F) | (sample_averaging<<5) );
+
+}
+esp_err_t max30102_set_roll_over(max30102_t* this, bool enabled) {
+    uint8_t previous;
+
+    //Tratar erros
+    esp_err_t ret = max30102_read_register(this, MAX30102_FIFO_CONFIG, &previous);
+    if(ret != ESP_OK) return ret;
+    if(enabled) {
+        return max30102_write_register( this, MAX30102_FIFO_CONFIG, previous | MAX30102_FIFO_CONFIG_ROLL_OVER_EN );
+    } else {
+        return max30102_write_register( this, MAX30102_FIFO_CONFIG,previous & ~MAX30102_FIFO_CONFIG_ROLL_OVER_EN );
+    }
+}
+esp_err_t max30102_set_almost_full(max30102_t* this, max30102_almost_full_t almost_full)
+{
+        uint8_t current_fifo_conf_reg;
+
+    //Tratar erros
+    esp_err_t ret = max30102_read_register( this,MAX30102_FIFO_CONFIG,&current_fifo_conf_reg );
+    if(ret != ESP_OK) return ret;
+    printf("Setting the almost full value...");
+    printf("%x\n", (current_fifo_conf_reg & 0xF0) | almost_full );
+    return max30102_write_register( this, MAX30102_FIFO_CONFIG, (current_fifo_conf_reg & 0xF0) | almost_full );
+}
 /**
  * @brief Write buffer of buflen bytes to a register of the MAX30102.
  *
@@ -38,9 +124,7 @@ void max30102_init(max30102_t *this, i2c_port_t i2c_num)
  * @param reg Register address to write to.
  * @param buf Val containing the bytes to write.
  */
-esp_err_t max30102_write_register( max30102_t* this,
-                                   uint8_t address,
-                                   uint8_t val      )
+esp_err_t max30102_write_register( max30102_t* this, uint8_t address, uint8_t val)
 {
     // start transmission to device
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();
@@ -52,9 +136,7 @@ esp_err_t max30102_write_register( max30102_t* this,
 
     // end transmission
     i2c_master_stop(cmd);
-    esp_err_t ret = i2c_master_cmd_begin( this->i2c_num,
-                                          cmd,
-                                          1000 / portTICK_RATE_MS );
+    esp_err_t ret = i2c_master_cmd_begin( this->i2c_num, cmd, 1000 / portTICK_RATE_MS );
     i2c_cmd_link_delete(cmd);
     return ret;
 }
@@ -65,9 +147,7 @@ esp_err_t max30102_write_register( max30102_t* this,
  * @param address Register address to read from.
  * @param reg reg containing the reg to read.
  */
-esp_err_t max30102_read_register( max30102_t* this,
-                                  uint8_t address,
-                                  uint8_t* reg     )
+esp_err_t max30102_read_register( max30102_t* this, uint8_t address,uint8_t* reg)
 {
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();
     i2c_master_start(cmd);
@@ -91,10 +171,7 @@ esp_err_t max30102_read_register( max30102_t* this,
 }
 
 // Reads num bytes starting from address register on device in to _buff array
-esp_err_t max30102_read_from( max30102_t* this,
-                              uint8_t address,
-                              uint8_t* reg,
-                              uint8_t size )
+esp_err_t max30102_read_from( max30102_t* this, uint8_t address, uint8_t* reg, uint8_t size )
 {
     if(!size)
         return ESP_OK;
@@ -119,309 +196,137 @@ esp_err_t max30102_read_from( max30102_t* this,
     i2c_cmd_link_delete(cmd);
     return ret;
 }
-/**
- * @brief Reset the sensor.
- *
- * @param obj Pointer to max30102_t object instance.
- */
-void max30102_reset(max30102_t *this)
+
+
+
+void check_ret(esp_err_t ret,uint8_t sensor_data_h){
+	if(ret == ESP_ERR_TIMEOUT) {
+		printf("I2C timeout\n");
+	} else if(ret == ESP_OK) {
+		printf("******************* \n");
+		printf("TASK[%d]  MASTER READ SENSOR( EN_MAX30102_READING_TASK )\n", 0);
+		printf("*******************\n");
+		printf("data: %02x\n", sensor_data_h);
+	} else {
+		printf("%s: No ack, sensor not connected...skip...\n", esp_err_to_name(ret));
+	}
+}
+esp_err_t max30102_read_fifo(i2c_port_t i2c_num, uint16_t sensorDataRED[],uint16_t sensorDataIR[])
 {
-    uint8_t val = 0x40;
-    max30102_write_register(this, MAX30102_MODE_CONFIG, &val);
+
+	uint8_t LED_1[FIFO_A_FULL/2][3],LED_2[FIFO_A_FULL/2][3];
+
+	i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+	i2c_master_start(cmd);
+	i2c_master_write_byte(cmd, MAX30102_I2C_ADDR << 1 | I2C_MASTER_WRITE, 1);
+	i2c_master_write_byte(cmd, MAX30102_FIFO_DATA, 1);
+	i2c_master_stop(cmd);	//send the stop bit
+	int ret = i2c_master_cmd_begin(i2c_num, cmd, 100 / portTICK_RATE_MS);
+	i2c_cmd_link_delete(cmd);
+	if (ret != ESP_OK) {
+		printf("ESP NOT OK!!\n");
+		return ret;
+	}
+	vTaskDelay(25 / portTICK_RATE_MS);
+
+	cmd = i2c_cmd_link_create();
+	i2c_master_start(cmd);
+	i2c_master_write_byte(cmd, MAX30102_I2C_ADDR << 1 | I2C_MASTER_READ, ACK_CHECK_EN);
+
+	for(int i=0; i < FIFO_A_FULL/2; i++){
+		i2c_master_read_byte(cmd, &LED_1[i][0], ACK_VAL);
+		i2c_master_read_byte(cmd, &LED_1[i][1], ACK_VAL);
+		i2c_master_read_byte(cmd, &LED_1[i][2], ACK_VAL);
+
+		i2c_master_read_byte(cmd, &LED_2[i][0], ACK_VAL);
+		i2c_master_read_byte(cmd, &LED_2[i][1], ACK_VAL);
+		i2c_master_read_byte(cmd, &LED_2[i][2], i==FIFO_A_FULL/2-1? NACK_VAL: ACK_VAL);	//NACK_VAL on the last iteration
+	}
+
+	i2c_master_stop(cmd);
+	ret = i2c_master_cmd_begin(i2c_num, cmd, 100 / portTICK_RATE_MS);
+	i2c_cmd_link_delete(cmd);
+
+	for(int i=0; i < FIFO_A_FULL/2; i++){
+		/*sensorDataRED[i] = (((LED_1[i][0] &  0b00000011) <<16) + (LED_1[i][1] <<8) + LED_1[i][2])>>(18-SPO2_RES)<<(18-SPO2_RES);
+		sensorDataIR[i]= (((LED_2[i][0] &  0b00000011) <<16) + (LED_2[i][1] <<8) + LED_2[i][2])>>(18-SPO2_RES)<<(18-SPO2_RES);	//*/
+		//printf("\t%x %x %x\n",LED_1[i][0]&0x03,LED_1[i][1],LED_1[i][2]);
+
+		sensorDataRED[i] = 	((((LED_1[i][0] &  0b00000011) <<16) + (LED_1[i][1] <<8) + LED_1[i][2])>>(18-SPO2_RES)<<(18-SPO2_RES))>>2;
+		sensorDataIR[i]= 	((((LED_2[i][0] &  0b00000011) <<16) + (LED_2[i][1] <<8) + LED_2[i][2])>>(18-SPO2_RES)<<(18-SPO2_RES))>>2;	//
+		/*#if SPO2_RES <= 16
+		sensorDataRED[i] =sensorDataRED[i] >>2;
+		sensorDataIR[i]  =sensorDataIR[i]  >>2;
+#endif*/
+		//fprintf(stdout,"%x, %x, %x\t%x, %x, %x\n",LED_1[i][0],LED_1[i][1],LED_1[i][2],LED_2[i][0],LED_2[i][1],LED_2[i][2]);
+#ifdef PRINT_ALL_SENSOR_DATA
+		fprintf(stdout,"0x%x\t0x%x\n",sensorDataRED[i],sensorDataIR[i]);
+        for (int  i= 0;  i< FIFO_A_FULL/2; i++) 
+        {
+            static const char *TX_BPM_TAG = "TX_BPM";
+            esp_log_level_set(TX_BPM_TAG, ESP_LOG_INFO);
+            sendData(TX_BPM_TAG, RAWsensorDataRED[i]);
+            static const char *TX_SpO2_TAG = "TX_SpO2";
+            esp_log_level_set(TX_SpO2_TAG, ESP_LOG_INFO);
+            sendData(TX_SpO2_TAG, RAWsensorDataIR[i+(FIFO_A_FULL/2)]);
+	    }
+#endif
+	}
+
+
+	/*int data1 = (((LED_1[i][0] && 0b00000011) <<16) + (LED_1[i][1] <<8) + LED_1[i][2])>>(18-SPO2_RES);
+		/int data2 = (((LED_2[i][0] && 0b00000011) <<16) + (LED_2[i][1] <<8) + LED_2[i][2])>>(18-SPO2_RES);	*/
+
+	//vTaskDelay(6000 / portTICK_RATE_MS);//magic delay
+
+	return ret;
 }
 
-/**
- * @brief Enable A_FULL interrupt.
- *
- * @param obj Pointer to max30102_t object instance.
- * @param enable Enable (1) or disable (0).
- */
-void max30102_set_a_full(max30102_t *this, uint8_t enable)
+
+esp_err_t max30102_print_registers(max30102_t* this)
 {
-    uint8_t reg = 0;
-    max30102_read_register(this, MAX30102_INTERRUPT_ENABLE_1, &reg);
-    reg &= ~(0x01 << MAX30102_INTERRUPT_A_FULL);
-    reg |= ((enable & 0x01) << MAX30102_INTERRUPT_A_FULL);
-    max30102_write_register(this, MAX30102_INTERRUPT_ENABLE_1, &reg);
+    uint8_t int_status, int_enable, fifo_write, fifo_ovf_cnt, fifo_read;
+    uint8_t fifo_data, mode_conf, sp02_conf, led_conf, temp_int, temp_frac;
+    uint8_t rev_id, part_id;
+    esp_err_t ret;
+
+    ret = max30102_read_register(this, MAX30102_INTERRUPT_STATUS_1, &int_status);
+    if(ret != ESP_OK) return ret;
+    ret = max30102_read_register(this, MAX30102_INTERRUPT_ENABLE_1, &int_enable);
+    if(ret != ESP_OK) return ret;
+    ret = max30102_read_register(this, MAX30102_FIFO_WR_PTR, &fifo_write);
+    if(ret != ESP_OK) return ret;
+    ret = max30102_read_register( this, MAX30102_OVF_COUNTER, &fifo_ovf_cnt );
+    if(ret != ESP_OK) return ret;
+    ret = max30102_read_register(this, MAX30102_FIFO_RD_PTR, &fifo_read);
+    if(ret != ESP_OK) return ret;
+    ret = max30102_read_register(this, MAX30102_FIFO_DATA, &fifo_data);
+    if(ret != ESP_OK) return ret;
+    ret = max30102_read_register(this, MAX30102_MODE_CONFIG, &mode_conf);
+    if(ret != ESP_OK) return ret;
+    ret = max30102_read_register(this, MAX30102_SPO2_CONFIG, &sp02_conf);
+    if(ret != ESP_OK) return ret;
+    ret = max30102_read_register(this, MAX30102_LED_IR_PA1, &led_conf);
+    if(ret != ESP_OK) return ret;
+    ret = max30102_read_register(this, MAX30102_LED_RED_PA2, &temp_int);
+    if(ret != ESP_OK) return ret;
+    ret = max30102_read_register(this, MAX30102_I2C_ADDR, &rev_id);
+    if(ret != ESP_OK) return ret;
+
+    printf("%x\t", int_status);
+    printf("%x\t", int_enable);
+    printf("%x\t", fifo_write);
+    printf("%x\t", fifo_ovf_cnt);
+    printf("%x\t", fifo_read);
+    printf("%x\t", fifo_data);
+    printf("%x\t", mode_conf);
+    printf("%x\t", sp02_conf);
+    printf("%x\t", led_conf);
+    printf("%x\t", temp_int);
+    printf("%x\n", rev_id);
+
+    return ESP_OK;
 }
-
-/**
- * @brief Enable PPG_RDY interrupt.
- *
- * @param obj Pointer to max30102_t object instance.
- * @param enable Enable (1) or disable (0).
- */
-void max30102_set_ppg_rdy(max30102_t *this, uint8_t enable)
-{
-    uint8_t reg = 0;
-    max30102_read_register(this, MAX30102_INTERRUPT_ENABLE_1, &reg);
-    reg &= ~(0x01 << MAX30102_INTERRUPT_PPG_RDY);
-    reg |= ((enable & 0x01) << MAX30102_INTERRUPT_PPG_RDY);
-    max30102_write_register(this, MAX30102_INTERRUPT_ENABLE_1, &reg);
-}
-
-/**
- * @brief Enable ALC_OVF interrupt.
- *
- * @param obj Pointer to max30102_t object instance.
- * @param enable Enable (1) or disable (0).
- */
-void max30102_set_alc_ovf(max30102_t *this, uint8_t enable)
-{
-    uint8_t reg = 0;
-    max30102_read_register(this, MAX30102_INTERRUPT_ENABLE_1, &reg);
-    reg &= ~(0x01 << MAX30102_INTERRUPT_ALC_OVF);
-    reg |= ((enable & 0x01) << MAX30102_INTERRUPT_ALC_OVF);
-    max30102_write_register(this, MAX30102_INTERRUPT_ENABLE_1, &reg);
-}
-
-
-/**
- * @brief Set interrupt flag on interrupt. To be called in the corresponding external interrupt handler.
- *
- * @param obj Pointer to max30102_t object instance.
- */
-void max30102_on_interrupt(max30102_t *obj)
-{
-    obj->_interrupt_flag = 1;
-}
-
-/**
- * @brief Check whether the interrupt flag is active.
- *
- * @param obj Pointer to max30102_t object instance.
- * @return uint8_t Active (1) or inactive (0).
- */
-uint8_t max30102_has_interrupt(max30102_t *obj)
-{
-    return obj->_interrupt_flag;
-}
-
-/**
- * @brief Read interrupt status registers (0x00 and 0x01) and perform corresponding tasks.
- *
- * @param obj Pointer to max30102_t object instance.
- */
-void max30102_interrupt_handler(max30102_t *this)
-{
-    uint8_t reg[2] = {0x00};
-    // Interrupt flag in registers 0x00 and 0x01 are cleared on read
-    max30102_read_register(this, MAX30102_INTERRUPT_ENABLE_1, &reg);
-
-    if ((reg[0] >> MAX30102_INTERRUPT_A_FULL) & 0x01)
-    {
-        // FIFO almost full
-        max30102_read_fifo(this);
-    }
-
-    if ((reg[0] >> MAX30102_INTERRUPT_PPG_RDY) & 0x01)
-    {
-        // New FIFO data ready
-    }
-
-    if ((reg[0] >> MAX30102_INTERRUPT_ALC_OVF) & 0x01)
-    {
-        // Ambient light overflow
-    }
-
-
-    // Reset interrupt flag
-   // this->_interrupt_flag = 0;
-}
-
-/**
- * @brief Shutdown the sensor.
- *
- * @param obj Pointer to max30102_t object instance.
- * @param shdn Shutdown bit.
- */
-void max30102_shutdown(max30102_t *this, uint8_t shdn)
-{
-    uint8_t config;
-    max30102_read_register(this, MAX30102_MODE_CONFIG, &config);
-    config = (config & 0x7f) | (shdn << MAX30102_MODE_SHDN);
-    max30102_write_register(this, MAX30102_MODE_CONFIG, &config);
-}
-
-/**
- * @brief Set measurement mode.
- *
- * @param obj Pointer to max30102_t object instance.
- * @param mode Measurement mode enum (max30102_mode_t).
- */
-void max30102_set_mode(max30102_t *obj, max30102_mode_t mode)
-{
-    uint8_t config;
-    max30102_read_register(obj, MAX30102_MODE_CONFIG, &config);
-    config = (config & 0xf8) | mode;
-    max30102_write_register(obj, MAX30102_MODE_CONFIG, &config);
-    //max30102_clear_fifo(obj);
-}
-
-/**
- * @brief Set sampling rate.
- *
- * @param obj Pointer to max30102_t object instance.
- * @param sr Sampling rate enum (max30102_spo2_st_t).
- */
-void max30102_set_sampling_rate(max30102_t *obj, max30102_sr_t sr)
-{
-    uint8_t current_spO2_reg;
-    max30102_read_register(obj, MAX30102_SPO2_CONFIG, &current_spO2_reg);
-
-    max30102_write_register(obj, MAX30102_SPO2_CONFIG, (current_spO2_reg & 0xE3) | (sr<<2));
-}
-
-/**
- * @brief Set led pulse width.
- *
- * @param obj Pointer to max30102_t object instance.
- * @param pw Pulse width enum (max30102_led_pw_t).
- */
-void max30102_set_led_pulse_width(max30102_t *obj, max30102_led_pw_t pw)
-{
-    uint8_t current_spO2_reg;
-    max30102_read_register(obj, MAX30102_SPO2_CONFIG, &current_spO2_reg);
-
-    max30102_write_register(obj, MAX30102_SPO2_CONFIG, (current_spO2_reg & 0xFC) | pw );
-}
-
-/**
- * @brief Set ADC resolution.
- *
- * @param obj Pointer to max30102_t object instance.
- * @param adc ADC resolution enum (max30102_adc_t).
- */
-void max30102_set_adc_resolution(max30102_t *obj, max30102_adc_t adc)
-{
-    uint8_t config;
-    max30102_read_register(obj, MAX30102_SPO2_CONFIG, &config);
-    config = (config & 0x1f) | (adc << MAX30102_SPO2_ADC_RGE);
-    max30102_write_register(obj, MAX30102_SPO2_CONFIG, &config);
-}
-
-/**
- * @brief Set LED current.
- *
- * @param obj Pointer to max30102_t object instance.
- * @param ma LED current float (0 < ma < 51.0).
- */
-void max30102_set_led_current_1(max30102_t *obj, float ma)
-{
-    uint8_t pa = ma / 0.2;
-    max30102_write_register(obj, MAX30102_LED_IR_PA1, &pa);
-}
-
-/**
- * @brief Set LED current.
- *
- * @param obj Pointer to max30102_t object instance.
- * @param ma LED current float (0 < ma < 51.0).
- */
-void max30102_set_led_current_2(max30102_t *obj, float ma)
-{
-    uint8_t pa = ma / 0.2;
-    max30102_write_register(obj, MAX30102_LED_RED_PA2, &pa);
-}
-
-/**
- * @brief Set slot mode when in multi-LED mode.
- *
- * @param obj Pointer to max30102_t object instance.
- * @param slot1 Slot 1 mode enum (max30102_multi_led_ctrl_t).
- * @param slot2 Slot 2 mode enum (max30102_multi_led_ctrl_t).
- */
-void max30102_set_multi_led_slot_1_2(max30102_t *obj, max30102_multi_led_ctrl_t slot1, max30102_multi_led_ctrl_t slot2)
-{
-    uint8_t val = 0;
-    val |= ((slot1 << MAX30102_MULTI_LED_CTRL_SLOT1) | (slot2 << MAX30102_MULTI_LED_CTRL_SLOT2));
-    max30102_write_register(obj, MAX30102_MULTI_LED_CTRL_1, &val);
-}
-
-/**
- * @brief Set slot mode when in multi-LED mode.
- *
- * @param obj Pointer to max30102_t object instance.
- * @param slot1 Slot 1 mode enum (max30102_multi_led_ctrl_t).
- * @param slot2 Slot 2 mode enum (max30102_multi_led_ctrl_t).
- */
-void max30102_set_multi_led_slot_3_4(max30102_t *obj, max30102_multi_led_ctrl_t slot3, max30102_multi_led_ctrl_t slot4)
-{
-    uint8_t val = 0;
-    val |= ((slot3 << MAX30102_MULTI_LED_CTRL_SLOT3) | (slot4 << MAX30102_MULTI_LED_CTRL_SLOT4));
-    max30102_write_register(obj, MAX30102_MULTI_LED_CTRL_2, &val);
-}
-
-/**
- * @brief
- *
- * @param obj Pointer to max30102_t object instance.
- * @param smp_ave
- * @param roll_over_en Roll over enabled(1) or disabled(0).
- * @param fifo_a_full Number of empty samples when A_FULL interrupt issued (0 < fifo_a_full < 15).
- */
-void max30102_set_fifo_config(max30102_t *obj, max30102_smp_ave_t smp_ave, uint8_t roll_over_en, uint8_t fifo_a_full)
-{
-    uint8_t config = 0x00;
-    config |= smp_ave << MAX30102_FIFO_CONFIG_SMP_AVE;
-    config |= ((roll_over_en & 0x01) << MAX30102_FIFO_CONFIG_ROLL_OVER_EN);
-    config |= ((fifo_a_full & 0x0f) << MAX30102_FIFO_CONFIG_FIFO_A_FULL);
-    max30102_write_register(obj, MAX30102_FIFO_CONFIG, &config);
-}
-
-/**
- * @brief Clear all FIFO pointers in the sensor.
- *
- * @param obj Pointer to max30102_t object instance.
- */
-void max30102_clear_fifo(max30102_t *obj)
-{
-    uint8_t val = 0x00;
-    max30102_write_register(obj, MAX30102_FIFO_WR_PTR, &val);
-    max30102_write_register(obj, MAX30102_FIFO_RD_PTR, &val);
-    max30102_write_register(obj, MAX30102_OVF_COUNTER, &val);
-}
-
-/**
- * @brief Read FIFO content and store to buffer in max30102_t object instance.
- *
- * @param obj Pointer to max30102_t object instance.
- */
-void max30102_read_fifo(max30102_t *obj)
-{
-    // First transaction: Get the FIFO_WR_PTR
-    uint8_t wr_ptr = 0, rd_ptr = 0;
-    max30102_read_register(obj, MAX30102_FIFO_WR_PTR, &wr_ptr);
-    max30102_read_register(obj, MAX30102_FIFO_RD_PTR, &rd_ptr);
-
-    int8_t num_samples;
-    char buff[2];
-    num_samples = (int8_t)wr_ptr - (int8_t)rd_ptr;
-    if (num_samples < 1)
-    {
-        num_samples += 32;
-    }
-
-    // Second transaction: Read NUM_SAMPLES_TO_READ samples from the FIFO
-    for (int8_t i = 0; i < num_samples; i++)
-    {
-        uint8_t sample[6];
-        max30102_read_from(obj, MAX30102_FIFO_DATA, sample, 6);
-        uint32_t ir_sample = ((uint32_t)(sample[0] << 16) | (uint32_t)(sample[1] << 8) | (uint32_t)(sample[3])) & 0x3ffff;
-        uint32_t red_sample = ((uint32_t)(sample[3] << 16) | (uint32_t)(sample[4] << 8) | (uint32_t)(sample[5])) & 0x3ffff;
-        obj->_ir_samples[i] = ir_sample;
-        obj->_red_samples[i] = red_sample;
-        buff[0] = (char) ir_sample;
-        buff[1] = (char) red_sample;
-        static const char *TX_BPM_TAG = "TX_BPM";
-        esp_log_level_set(TX_BPM_TAG, ESP_LOG_INFO);
-        sendData(TX_BPM_TAG, buff[0]);
-        static const char *TX_SpO2_TAG = "TX_SpO2";
-        esp_log_level_set(TX_SpO2_TAG, ESP_LOG_INFO);
-        sendData(TX_SpO2_TAG, buff[1]);
-    }
-}
-
 
 
 /**

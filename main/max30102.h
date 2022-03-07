@@ -39,11 +39,19 @@
 #define MAX30102_INTERRUPT_ALC_OVF 5
 #define MAX30102_INTERRUPT_DIE_TEMP_RDY 1
 
-#define MAX30102_FIFO_WR_PTR 0x04
-#define MAX30102_OVF_COUNTER 0x05
-#define MAX30102_FIFO_RD_PTR 0x06
-
-#define MAX30102_FIFO_DATA 0x07
+#define MAX30102_FIFO_WR_PTR    0x04
+#define MAX30102_OVF_COUNTER    0x05
+#define MAX30102_FIFO_RD_PTR    0x06
+#define FIFO_A_FULL_EN		    0x80
+#define PRG_RDY_EN			    0x40
+#define ALC_OVF_EN			    0x20
+#define PROX_INT_EN			    0x10
+#define MAX30102_FIFO_DATA      0x07
+#define ACK_CHECK_EN            0x1              // I2C master will check ack from slave
+#define ACK_CHECK_DIS           0x0              // I2C master will not check ack from slave
+#define ACK_VAL                 0x0              // I2C ack value
+#define NACK_VAL                0x1              // I2C nack value
+#define SPO2_RES 				16				 //SPO2 ADC resolution 18,17,16,15 bits
 
 #define MAX30102_FIFO_CONFIG 0x08
 #define MAX30102_FIFO_CONFIG_SMP_AVE 5
@@ -62,7 +70,7 @@
 
 #define MAX30102_LED_IR_PA1 0x0c
 #define MAX30102_LED_RED_PA2 0x0d
-
+#define REG_PROX_INT_THRESH 0x30
 #define MAX30102_MULTI_LED_CTRL_1 0x11
 #define MAX30102_MULTI_LED_CTRL_SLOT2 4
 #define MAX30102_MULTI_LED_CTRL_SLOT1 0
@@ -75,7 +83,70 @@
 #define MAX30102_DIE_TFRAC_INCREMENT 0.0625f
 #define MAX30102_DIE_TEMP_CONFIG 0x21
 #define MAX30102_DIE_TEMP_EN 1
+#define FIFO_A_FULL 			30				 //Options: 17 - 32			default:17
+/**
+ * FIFO Configuration structure for 30102
+ * Almost Full Value
+ */
 
+typedef enum AlmostFull {
+    MAX30102_ALMOST_FULL_0             = 0x00,
+    MAX30102_ALMOST_FULL_1             = 0x01,
+    MAX30102_ALMOST_FULL_2             = 0x02,
+    MAX30102_ALMOST_FULL_3             = 0x03,
+    MAX30102_ALMOST_FULL_4             = 0x04,
+    MAX30102_ALMOST_FULL_5             = 0x05,
+    MAX30102_ALMOST_FULL_6             = 0x06,
+    MAX30102_ALMOST_FULL_7             = 0x07,
+    MAX30102_ALMOST_FULL_8             = 0x08,
+    MAX30102_ALMOST_FULL_9             = 0x09,
+    MAX30102_ALMOST_FULL_10            = 0x0A,
+    MAX30102_ALMOST_FULL_11            = 0x0B,
+    MAX30102_ALMOST_FULL_12            = 0x0C,
+    MAX30102_ALMOST_FULL_13            = 0x0D,
+    MAX30102_ALMOST_FULL_14            = 0x0E,
+    MAX30102_ALMOST_FULL_15            = 0x0F
+}max30102_almost_full_t;
+typedef enum ADCRange{
+    MAX30102_ADC_RANGE_2048               = 0x00,
+    MAX30102_ADC_RANGE_4096               = 0x01,
+    MAX30102_ADC_RANGE_8192               = 0x02,
+    MAX30102_ADC_RANGE_16384              = 0x03  
+}max30102_adc_range_t;
+/**
+ * Sampling rate enum.
+ * Internal sampling rates from 50Hz up to 1KHz.
+ */
+typedef enum SamplingRate {
+    MAX30102_SAMPLING_RATE_50HZ           = 0x00,
+    MAX30102_SAMPLING_RATE_100HZ          = 0x01,
+    MAX30102_SAMPLING_RATE_200HZ          = 0x02,
+    MAX30102_SAMPLING_RATE_400HZ          = 0x03,
+    MAX30102_SAMPLING_RATE_800HZ          = 0x04,
+    MAX30102_SAMPLING_RATE_1000HZ          = 0x05,
+    MAX30102_SAMPLING_RATE_1600HZ          = 0x06,
+    MAX30102_SAMPLING_RATE_3200HZ          = 0x07
+} max30102_sampling_rate_t;
+
+typedef enum LEDCurrent {
+    MAX30102_LED_CURRENT_0MA              = 0x00,
+    MAX30102_LED_CURRENT_4_4MA            = 0x16,
+    MAX30102_LED_CURRENT_7_6MA            = 0x26,
+    MAX30102_LED_CURRENT_11MA             = 0x37,
+    MAX30102_LED_CURRENT_14_2MA           = 0x47,
+    MAX30102_LED_CURRENT_17_4MA           = 0x57,
+    MAX30102_LED_CURRENT_20_8MA           = 0x68,
+    MAX30102_LED_CURRENT_24MA             = 0x78,
+    MAX30102_LED_CURRENT_27_1MA           = 0x88,
+    MAX30102_LED_CURRENT_30_6MA           = 0x99,
+    MAX30102_LED_CURRENT_33_8MA           = 0xA9,
+    MAX30102_LED_CURRENT_37MA             = 0xB9,
+    MAX30102_LED_CURRENT_40_2MA           = 0xC9,
+    MAX30102_LED_CURRENT_43_6MA           = 0xDA,
+    MAX30102_LED_CURRENT_46_8MA           = 0xEA,
+    MAX30102_LED_CURRENT_50MA             = 0xFA,
+    MAX30102_LED_CURRENT_51MA             = 0xFF
+} max30102_current_t;
 typedef enum max30102_mode_t
 {
     max30102_heart_rate = 0x02,
@@ -128,6 +199,11 @@ typedef enum max30102_multi_led_ctrl_t
     max30102_led_ir
 } max30102_multi_led_ctrl_t;
 
+typedef struct _max30102_fifo_t {
+    uint16_t raw_ir;
+    uint16_t raw_red;
+} max30102_fifo_t;
+
 typedef struct max30102_t
 {
     i2c_port_t i2c_num;
@@ -143,152 +219,104 @@ typedef struct Message {
   int SpO2;
 } Message;
 Message msg;
+void sensor_task_manager(void* arg);
+void i2c_task_0(void* arg);
+void check_ret(esp_err_t ret,uint8_t sensor_data_h);
+void idle_task_0(void* arg);
+void i2c_task_1(void* arg);
 
 
-void max30102_init(max30102_t *this,i2c_port_t i2c_num);
+/**
+ * @brief MAX30102 initiation function.
+ *
+ * @param this Pointer to max30102_t object instance.
+ * @param i2cnum Pointer to I2C object handle
+ */
+esp_err_t max30102_init(max30102_t *this,i2c_port_t i2c_num);
 esp_err_t max30102_write_register(max30102_t* this, uint8_t address, uint8_t val);
 esp_err_t max30102_read_register(max30102_t* this, uint8_t address, uint8_t* reg);
-/**
- * @brief Reset the sensor.
- *
- * @param obj Pointer to max30102_t object instance.
- */
-void max30102_reset(max30102_t *obj);
-/**
- * @brief Enable A_FULL interrupt.
- *
- * @param obj Pointer to max30102_t object instance.
- * @param enable Enable (1) or disable (0).
- */
-void max30102_set_a_full(max30102_t *obj, uint8_t enable);
-/**
- * @brief Enable PPG_RDY interrupt.
- *
- * @param obj Pointer to max30102_t object instance.
- * @param enable Enable (1) or disable (0).
- */
-void max30102_set_ppg_rdy(max30102_t *obj, uint8_t enable);
-/**
- * @brief Enable ALC_OVF interrupt.
- *
- * @param obj Pointer to max30102_t object instance.
- * @param enable Enable (1) or disable (0).
- */
-void max30102_set_alc_ovf(max30102_t *obj, uint8_t enable);
-void max30102_set_die_temp_rdy(max30102_t *obj, uint8_t enable);
-void max30102_set_die_temp_en(max30102_t *obj, uint8_t enable);
-/**
- * @brief Set interrupt flag on interrupt. To be called in the corresponding external interrupt handler.
- *
- * @param obj Pointer to max30102_t object instance.
- */
-void max30102_on_interrupt(max30102_t *obj);
-/**
- * @brief Check whether the interrupt flag is active.
- *
- * @param obj Pointer to max30102_t object instance.
- * @return uint8_t Active (1) or inactive (0).
- */
-uint8_t max30102_has_interrupt(max30102_t *obj);
-/**
- * @brief Read interrupt status registers (0x00 and 0x01) and perform corresponding tasks.
- *
- * @param obj Pointer to max30102_t object instance.
- */
-void max30102_interrupt_handler(max30102_t *obj);
-/**
- * @brief Shutdown the sensor.
- *
- * @param obj Pointer to max30102_t object instance.
- * @param shdn Shutdown bit.
- */
-void max30102_shutdown(max30102_t *obj, uint8_t shdn);
+void print_array(uint8_t *array,uint16_t size);
 
 /**
- * @brief Set measurement mode.
+ * @brief Read FIFO content and store to buffer in max30102_t object instance.
  *
- * @param obj Pointer to max30102_t object instance.
- * @param mode Measurement mode enum (max30102_mode_t).
+ * @param sensorDataRED 
+ * @param sensorDataIR 
  */
+esp_err_t max30102_read_fifo(i2c_port_t i2c_num, uint16_t sensorDataRED[],uint16_t sensorDataIR[]);
 
-void max30102_set_mode(max30102_t *obj, max30102_mode_t mode);
+
+/**
+ * @brief Sets the sample averaging.
+ * 
+ * @details This is automatically called by the initializer function.
+ * 
+ * @param this is the address of the configuration structure.
+ * @param sample_averaging is the sample averaging desired.
+ * 
+ * @returns status of execution.
+ * */
+esp_err_t max30102_set_sample_averaging(max30102_t* this,  max30102_smp_ave_t sample_averaging);
+/**
+ * @brief Sets the rollever .
+ * 
+ * @details This is automatically called by the initializer function.
+ * 
+ * @param this is the address of the configuration structure.
+ * @param enabled is for enable the rollover.
+ * 
+ * @returns status of execution.
+ * */
+esp_err_t max30102_set_roll_over(max30102_t* this, bool enabled);
+/**
+ * @brief Sets the number of samples left to trigger almost full
+ * 
+ * @details This is automatically called by the initializer function.
+ * 
+ * @param this is the address of the configuration structure.
+ * @param almost_full is the desired sample averaging.
+ * 
+ * @returns status of execution.
+ */
+esp_err_t max30102_set_almost_full(max30102_t* this, max30102_almost_full_t almost_full);
+/**
+ * @brief Sets the led currents.
+ * 
+ * @details This is automatically called by the initializer function
+ * or automatically when needed by the library.
+ * 
+ * @param this is the address of the configuration structure.
+ * @param red_current is the current value of the Red Led.
+ * @param ir_current is the current value of the IR Led.
+ * 
+ * @returns status of execution.
+ */
+esp_err_t max30102_set_led_current( max30102_t* this,  max30102_current_t red_current,  max30102_current_t ir_current );
+/**
+ * @brief Sets the resolution. High or standard.
+ * 
+ * @details This is automatically called by the initializer function.
+ * 
+ * @param this is the address of the configuration structure.
+ * @param enable is if high resolution will be enabled.
+ * 
+ * @returns status of execution.
+ */
+esp_err_t max30102_set_high_res(max30102_t* this, max30102_adc_range_t adc_range);
+
 /**
  * @brief Set the internal sampling rate.
  * 
  * @details This is automatically called by the initializer function.
  * 
- * @param obj is the address of the configuration structure.
- * @param sr is the sampling rate desired.
+ * @param this is the address of the configuration structure.
+ * @param rate is the sampling rate desired.
  * 
  * @returns status of execution.
  */
-void max30102_set_sampling_rate(max30102_t *obj, max30102_sr_t sr);
-/**
- * @brief Set led pulse width.
- *
- * @param obj Pointer to max30102_t object instance.
- * @param pw Pulse width enum (max30102_led_pw_t).
- */
-void max30102_set_led_pulse_width(max30102_t *obj, max30102_led_pw_t pw);
-/**
- * @brief Set ADC resolution.
- *
- * @param obj Pointer to max30102_t object instance.
- * @param adc ADC resolution enum (max30102_adc_t).
- */
-void max30102_set_adc_resolution(max30102_t *obj, max30102_adc_t adc);
-/**
- * @brief Set LED current.
- *
- * @param obj Pointer to max30102_t object instance.
- * @param ma LED current float (0 < ma < 51.0).
- */
-void max30102_set_led_current_1(max30102_t *obj, float ma);
-/**
- * @brief Set LED current.
- *
- * @param obj Pointer to max30102_t object instance.
- * @param ma LED current float (0 < ma < 51.0).
- */
-void max30102_set_led_current_2(max30102_t *obj, float ma);
-/**
- * @brief Set slot mode when in multi-LED mode.
- *
- * @param obj Pointer to max30102_t object instance.
- * @param slot1 Slot 1 mode enum (max30102_multi_led_ctrl_t).
- * @param slot2 Slot 2 mode enum (max30102_multi_led_ctrl_t).
- */
-void max30102_set_multi_led_slot_1_2(max30102_t *obj, max30102_multi_led_ctrl_t slot1, max30102_multi_led_ctrl_t slot2);
-/**
- * @brief Set slot mode when in multi-LED mode.
- *
- * @param obj Pointer to max30102_t object instance.
- * @param slot1 Slot 1 mode enum (max30102_multi_led_ctrl_t).
- * @param slot2 Slot 2 mode enum (max30102_multi_led_ctrl_t).
- */
-void max30102_set_multi_led_slot_3_4(max30102_t *obj, max30102_multi_led_ctrl_t slot3, max30102_multi_led_ctrl_t slot4);
-/**
- * @brief
- *
- * @param obj Pointer to max30102_t object instance.
- * @param smp_ave
- * @param roll_over_en Roll over enabled(1) or disabled(0).
- * @param fifo_a_full Number of empty samples when A_FULL interrupt issued (0 < fifo_a_full < 15).
- */
-void max30102_set_fifo_config(max30102_t *obj, max30102_smp_ave_t smp_ave, uint8_t roll_over_en, uint8_t fifo_a_full);
-/**
- * @brief Clear all FIFO pointers in the sensor.
- *
- * @param obj Pointer to max30102_t object instance.
- */
-void max30102_clear_fifo(max30102_t *obj);
-/**
- * @brief Read FIFO content and store to buffer in max30102_t object instance.
- *
- * @param obj Pointer to max30102_t object instance.
- */
-void max30102_read_fifo(max30102_t *obj);
+esp_err_t max30102_set_sampling_rate( max30102_t* this,  max30102_sampling_rate_t rate );
 
+esp_err_t max30102_print_registers(max30102_t* this);
 #endif
 
 
