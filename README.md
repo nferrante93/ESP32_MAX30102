@@ -68,14 +68,16 @@ This interrupt table is implemented as an enum.
 * Enable the required interrupts:
 ```
 // Enable FIFO_A_FULL interrupt
-max30102_set_a_full(&max30102, 1);
+esp_err_t ret = max30102_write_register(this,MAX30102_INTERRUPT_ENABLE_1,PROX_INT_EN);	//0b0001 0000 //enable prox interrupt 
 ```
 * Run interrupt handler once interrupt flag is active:
 ```
-// If interrupt flag is active
-if (max30102_has_interrupt(&max30102))
-// Run interrupt handler to read FIFO
-max30102_interrupt_handler(&max30102);
+// If the finger is near the sensor the prox_int became 1 and the fifo a full interrupt will be enabled:
+	if (prox_int){
+		sensor_have_finger[0] = true ;
+		//clear buffer
+		max30102_write_register(&max30102,MAX30102_INTERRUPT_ENABLE_1, FIFO_A_FULL_EN);	//0b1000 0000 //disable prox interrupt and enable fifo_a_full
+	}
 
 ```
 The second possibility is to use the Semaphore for notify the Getbpm task when the interrupts happens and use also a led that wil blink when the interrupts is triggered.
